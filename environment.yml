@@ -1,0 +1,41 @@
+name: fragment-fusion
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # Core Python
+  - python=3.11
+  - pip
+  
+  # Essential scientific computing
+  - numpy
+  - scipy
+  - pandas
+  - scikit-learn
+  
+  # Deep learning
+  - pytorch
+  - torchvision
+  - torchaudio
+  
+  # Bioinformatics tools
+  - pysam
+  - biopython
+  - bedtools
+  - snakemake
+  - wget
+  - sra-tools
+  - seqtk
+  
+  # Development tools
+  - git
+  - jupyter
+  - ipykernel
+  
+  # Pip packages
+  - pip:
+    - transformers
+    - shap
+    - captum
+    - nanopolish 

@@ -1,0 +1,172 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fragment-fusion"
+version = "0.1.0"
+description = "Cross-attention transformer for multi-modal cfDNA analysis"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your-email@institution.edu"}
+]
+maintainers = [
+    {name = "Your Name", email = "your-email@institution.edu"}
+]
+keywords = ["cfDNA", "cancer", "methylation", "transformer", "bioinformatics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision",
+    "torchaudio",
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "pandas>=1.3.0",
+    "scikit-learn>=1.0.0",
+    "pysam>=0.19.0",
+    "biopython>=1.79.0",
+    "h5py>=3.7.0",
+    "zarr>=2.12.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+    "plotly>=5.0.0",
+    "shap>=0.41.0",
+    "fastapi>=0.95.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=1.10.0",
+    "tqdm>=4.64.0",
+    "click>=8.1.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.28.0",
+    "transformers>=4.20.0",
+    "datasets>=2.0.0",
+    "wandb>=0.13.0",
+    "tensorboard>=2.10.0",
+    "optuna>=3.0.0",
+    "ray[tune]>=2.0.0",
+    "mlflow>=1.28.0",
+    "hydra-core>=1.2.0",
+    "omegaconf>=2.2.0",
+    "rich>=12.0.0",
+    "typer>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "mypy>=0.991.0",
+    "jupyter>=1.0.0",
+    "ipykernel",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme",
+]
+bio = [
+    "samtools>=1.15.0",
+    "nanopolish>=0.14.0",
+    "minimap2>=2.24.0",
+    "bedtools>=2.30.0",
+    "bwa>=0.7.0",
+    "snakemake>=7.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/fragment-fusion"
+Documentation = "https://fragment-fusion.readthedocs.io"
+Repository = "https://github.com/your-org/fragment-fusion.git"
+"Bug Tracker" = "https://github.com/your-org/fragment-fusion/issues"
+
+[project.scripts]
+fragment-fusion = "fragment_fusion.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.txt", "*.md"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["fragment_fusion"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "torch.*",
+    "transformers.*",
+    "shap.*",
+    "plotly.*",
+    "wandb.*",
+    "ray.*",
+    "mlflow.*",
+    "hydra.*",
+    "omegaconf.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+] 
