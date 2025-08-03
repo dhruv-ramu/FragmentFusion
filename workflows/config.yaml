@@ -1,0 +1,63 @@
+# FragmentFusion Workflow Configuration
+
+# Sample information
+samples:
+  - "sample_001_cancer"
+  - "sample_002_cancer" 
+  - "sample_003_healthy"
+  - "sample_004_healthy"
+
+# Directory structure
+data_dir: "data"
+results_dir: "results"
+
+# Quality control parameters
+qc_params:
+  min_read_length: 50
+  min_base_quality: 20
+  min_mapping_quality: 30
+
+# Fragment analysis parameters
+fragment_params:
+  min_fragment_length: 100
+  max_fragment_length: 1000
+  motif_length: 4
+
+# Methylation parameters
+methylation_params:
+  cpg_window_size: 100
+  min_cpg_coverage: 10
+  methylation_threshold: 0.1
+
+# Training parameters
+training_params:
+  batch_size: 32
+  learning_rate: 1e-4
+  epochs: 100
+  validation_split: 0.2
+  early_stopping_patience: 10
+
+# Model parameters
+model_params:
+  model_dim: 256
+  num_layers: 6
+  num_heads: 8
+  dropout: 0.1
+  activation: "gelu"
+
+# Computational resources
+resources:
+  cpu_cores: 8
+  memory_gb: 32
+  gpu_memory_gb: 16
+
+# Output formats
+output_formats:
+  - "h5"
+  - "json"
+  - "html"
+
+# Logging
+logging:
+  level: "INFO"
+  log_dir: "logs" 

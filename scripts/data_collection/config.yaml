@@ -1,0 +1,126 @@
+# FragmentFusion Data Collection Configuration
+# Focus on cfDNA Whole Genome Sequencing for Fragmentomics
+
+# Data sources configuration
+data_sources:
+  ena:
+    base_url: "https://www.ebi.ac.uk/ena/browser/api/xml"
+    ftp_base: "ftp://ftp.sra.ebi.ac.uk/vol1/fastq"
+    max_retries: 3
+    timeout: 300
+    
+  ncbi:
+    base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    sra_base: "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi"
+    max_retries: 3
+    timeout: 300
+    
+  10x_genomics:
+    base_url: "https://cf.10xgenomics.com"
+    max_retries: 3
+    timeout: 300
+
+# cfDNA WGS datasets to collect
+cfdna_datasets:
+  # ENA datasets
+  ena_datasets:
+    - accession: "PRJEB12345"  # Example - replace with actual cfDNA WGS project
+      description: "cfDNA WGS from cancer patients"
+      sample_count: 100
+      file_types: ["FASTQ", "BAM"]
+      paired_end: true
+      read_length: 150
+      
+    - accession: "PRJEB67890"  # Example - replace with actual cfDNA WGS project
+      description: "cfDNA WGS from healthy controls"
+      sample_count: 50
+      file_types: ["FASTQ", "BAM"]
+      paired_end: true
+      read_length: 150
+      
+  # NCBI SRA datasets
+  ncbi_datasets:
+    - accession: "SRP123456"  # Example - replace with actual cfDNA WGS project
+      description: "cfDNA WGS pan-cancer study"
+      sample_count: 200
+      file_types: ["FASTQ", "BAM"]
+      paired_end: true
+      read_length: 150
+      
+    - accession: "SRP789012"  # Example - replace with actual cfDNA WGS project
+      description: "cfDNA WGS early detection study"
+      sample_count: 150
+      file_types: ["FASTQ", "BAM"]
+      paired_end: true
+      read_length: 150
+      
+  # 10x Genomics datasets (if available)
+  10x_datasets:
+    - accession: "10x_cfdna_001"  # Example - replace with actual dataset
+      description: "10x Genomics cfDNA WGS"
+      sample_count: 25
+      file_types: ["FASTQ", "BAM"]
+      paired_end: true
+      read_length: 150
+
+# Quality filters for cfDNA WGS
+quality_filters:
+  min_read_length: 50
+  min_base_quality: 20
+  min_mapping_quality: 30
+  min_fragment_length: 100
+  max_fragment_length: 1000
+  min_coverage: 10
+  max_duplicate_rate: 0.1
+
+# Download settings
+download_settings:
+  max_concurrent_downloads: 4
+  chunk_size: 8192
+  resume_downloads: true
+  validate_downloads: true
+  checksum_validation: true
+  
+# Storage configuration
+storage:
+  base_dir: "data"
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  logs: "logs"
+  
+  # Directory structure for cfDNA WGS
+  cfdna_structure:
+    fastq: "data/raw/cfdna_wgs/fastq"
+    bam: "data/raw/cfdna_wgs/bam"
+    metadata: "data/raw/cfdna_wgs/metadata"
+    qc_reports: "data/processed/cfdna_wgs/qc_reports"
+    fragmentomics: "data/processed/cfdna_wgs/fragmentomics"
+
+# Metadata requirements
+metadata_fields:
+  required:
+    - "sample_id"
+    - "accession"
+    - "source"
+    - "cancer_type"
+    - "sample_type"
+    - "sequencing_platform"
+    - "read_length"
+    - "paired_end"
+    
+  optional:
+    - "patient_id"
+    - "age"
+    - "gender"
+    - "stage"
+    - "treatment_status"
+    - "collection_date"
+    - "processing_date"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/data_collection.log"
+  max_file_size: "100MB"
+  backup_count: 5 

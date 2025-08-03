@@ -1,0 +1,212 @@
+# Transformer Training Subworkflow
+# Handles model training, validation, and evaluation
+
+import os
+from pathlib import Path
+
+# Get parameters from main workflow
+SAMPLES = config.get("samples", [])
+DATA_DIR = config.get("data_dir", "data")
+RESULTS_DIR = config.get("results_dir", "results")
+PROCESSED_DIR = f"{RESULTS_DIR}/cfdna_processed"
+TRAINING_DIR = f"{RESULTS_DIR}/training"
+MODELS_DIR = f"{RESULTS_DIR}/models"
+
+# Training parameters
+TRAINING_PARAMS = config.get("training_params", {})
+BATCH_SIZE = TRAINING_PARAMS.get("batch_size", 32)
+LEARNING_RATE = TRAINING_PARAMS.get("learning_rate", 1e-4)
+EPOCHS = TRAINING_PARAMS.get("epochs", 100)
+VALIDATION_SPLIT = TRAINING_PARAMS.get("validation_split", 0.2)
+
+# Model parameters
+MODEL_PARAMS = config.get("model_params", {})
+MODEL_DIM = MODEL_PARAMS.get("model_dim", 256)
+NUM_LAYERS = MODEL_PARAMS.get("num_layers", 6)
+NUM_HEADS = MODEL_PARAMS.get("num_heads", 8)
+
+# Rule: Prepare Training Data
+rule prepare_training_data:
+    input:
+        features = expand(f"{PROCESSED_DIR}/{{sample}}_features.h5", sample=SAMPLES),
+        labels = f"{DATA_DIR}/labels.csv"
+    output:
+        train_data = f"{TRAINING_DIR}/train_data.h5",
+        val_data = f"{TRAINING_DIR}/val_data.h5",
+        data_stats = f"{TRAINING_DIR}/data_stats.json"
+    log:
+        f"{TRAINING_DIR}/logs/prepare_data.log"
+    message: "Preparing training and validation datasets"
+    shell:
+        """
+        python scripts/prepare_training_data.py \
+            --features {input.features} \
+            --labels {input.labels} \
+            --train-output {output.train_data} \
+            --val-output {output.val_data} \
+            --val-split {VALIDATION_SPLIT} \
+            --stats {output.data_stats} \
+            --log {log}
+        """
+
+# Rule: Pre-train Model
+rule pretrain_model:
+    input:
+        train_data = f"{TRAINING_DIR}/train_data.h5",
+        val_data = f"{TRAINING_DIR}/val_data.h5"
+    output:
+        pretrained_model = f"{MODELS_DIR}/pretrained_model.pt",
+        pretrain_logs = f"{TRAINING_DIR}/pretrain_logs.json"
+    log:
+        f"{TRAINING_DIR}/logs/pretrain.log"
+    message: "Pre-training FragmentFusion model"
+    shell:
+        """
+        python scripts/pretrain_model.py \
+            --train-data {input.train_data} \
+            --val-data {input.val_data} \
+            --model-output {output.pretrained_model} \
+            --logs {output.pretrain_logs} \
+            --batch-size {BATCH_SIZE} \
+            --learning-rate {LEARNING_RATE} \
+            --epochs {EPOCHS} \
+            --model-dim {MODEL_DIM} \
+            --num-layers {NUM_LAYERS} \
+            --num-heads {NUM_HEADS} \
+            --log {log}
+        """
+
+# Rule: Fine-tune Model
+rule finetune_model:
+    input:
+        pretrained_model = f"{MODELS_DIR}/pretrained_model.pt",
+        train_data = f"{TRAINING_DIR}/train_data.h5",
+        val_data = f"{TRAINING_DIR}/val_data.h5"
+    output:
+        finetuned_model = f"{MODELS_DIR}/finetuned_model.pt",
+        finetune_logs = f"{TRAINING_DIR}/finetune_logs.json"
+    log:
+        f"{TRAINING_DIR}/logs/finetune.log"
+    message: "Fine-tuning FragmentFusion model"
+    shell:
+        """
+        python scripts/finetune_model.py \
+            --pretrained-model {input.pretrained_model} \
+            --train-data {input.train_data} \
+            --val-data {input.val_data} \
+            --model-output {output.finetuned_model} \
+            --logs {output.finetune_logs} \
+            --batch-size {BATCH_SIZE} \
+            --learning-rate {LEARNING_RATE} \
+            --epochs {EPOCHS} \
+            --log {log}
+        """
+
+# Rule: Evaluate Model
+rule evaluate_model:
+    input:
+        model = f"{MODELS_DIR}/finetuned_model.pt",
+        test_data = f"{TRAINING_DIR}/test_data.h5"
+    output:
+        evaluation_results = f"{RESULTS_DIR}/evaluation/evaluation_results.json",
+        evaluation_plots = f"{RESULTS_DIR}/evaluation/evaluation_plots.html"
+    log:
+        f"{TRAINING_DIR}/logs/evaluate.log"
+    message: "Evaluating FragmentFusion model"
+    shell:
+        """
+        python scripts/evaluate_model.py \
+            --model {input.model} \
+            --test-data {input.test_data} \
+            --results {output.evaluation_results} \
+            --plots {output.evaluation_plots} \
+            --log {log}
+        """
+
+# Rule: Generate Training Summary
+rule training_summary:
+    input:
+        pretrain_logs = f"{TRAINING_DIR}/pretrain_logs.json",
+        finetune_logs = f"{TRAINING_DIR}/finetune_logs.json",
+        evaluation_results = f"{RESULTS_DIR}/evaluation/evaluation_results.json"
+    output:
+        summary = f"{TRAINING_DIR}/training_summary.json",
+        summary_report = f"{TRAINING_DIR}/training_summary_report.html"
+    log:
+        f"{TRAINING_DIR}/logs/summary.log"
+    message: "Generating training summary report"
+    shell:
+        """
+        python scripts/generate_training_summary.py \
+            --pretrain-logs {input.pretrain_logs} \
+            --finetune-logs {input.finetune_logs} \
+            --evaluation-results {input.evaluation_results} \
+            --summary {output.summary} \
+            --report {output.summary_report} \
+            --log {log}
+        """
+
+# Rule: Model Checkpointing
+rule save_final_model:
+    input:
+        model = f"{MODELS_DIR}/finetuned_model.pt",
+        evaluation_results = f"{RESULTS_DIR}/evaluation/evaluation_results.json"
+    output:
+        final_model = f"{MODELS_DIR}/fragment_fusion_final.pt",
+        model_info = f"{MODELS_DIR}/model_info.json"
+    log:
+        f"{TRAINING_DIR}/logs/save_final_model.log"
+    message: "Saving final model with metadata"
+    shell:
+        """
+        python scripts/save_final_model.py \
+            --model {input.model} \
+            --evaluation {input.evaluation_results} \
+            --output {output.final_model} \
+            --info {output.model_info} \
+            --log {log}
+        """
+
+# Rule: Hyperparameter Optimization (Optional)
+rule hyperparameter_optimization:
+    input:
+        train_data = f"{TRAINING_DIR}/train_data.h5",
+        val_data = f"{TRAINING_DIR}/val_data.h5"
+    output:
+        best_params = f"{TRAINING_DIR}/best_hyperparameters.json",
+        opt_logs = f"{TRAINING_DIR}/hyperopt_logs.json"
+    log:
+        f"{TRAINING_DIR}/logs/hyperopt.log"
+    message: "Running hyperparameter optimization"
+    shell:
+        """
+        python scripts/hyperparameter_optimization.py \
+            --train-data {input.train_data} \
+            --val-data {input.val_data} \
+            --best-params {output.best_params} \
+            --logs {output.opt_logs} \
+            --log {log}
+        """
+
+# Rule: Model Interpretability
+rule model_interpretability:
+    input:
+        model = f"{MODELS_DIR}/fragment_fusion_final.pt",
+        test_data = f"{TRAINING_DIR}/test_data.h5"
+    output:
+        shap_values = f"{RESULTS_DIR}/interpretability/shap_values.h5",
+        attention_maps = f"{RESULTS_DIR}/interpretability/attention_maps.h5",
+        interpretability_report = f"{RESULTS_DIR}/interpretability/interpretability_report.html"
+    log:
+        f"{TRAINING_DIR}/logs/interpretability.log"
+    message: "Generating model interpretability analysis"
+    shell:
+        """
+        python scripts/model_interpretability.py \
+            --model {input.model} \
+            --test-data {input.test_data} \
+            --shap-values {output.shap_values} \
+            --attention-maps {output.attention_maps} \
+            --report {output.interpretability_report} \
+            --log {log}
+        """ 

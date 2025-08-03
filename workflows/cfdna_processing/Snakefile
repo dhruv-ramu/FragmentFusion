@@ -1,0 +1,202 @@
+# cfDNA Processing Subworkflow
+# Handles signal extraction from raw cfDNA data
+
+import os
+from pathlib import Path
+
+# Get parameters from main workflow
+SAMPLES = config.get("samples", [])
+DATA_DIR = config.get("data_dir", "data")
+RESULTS_DIR = config.get("results_dir", "results")
+PROCESSED_DIR = f"{RESULTS_DIR}/cfdna_processed"
+
+# Quality control parameters
+QC_PARAMS = config.get("qc_params", {})
+MIN_READ_LENGTH = QC_PARAMS.get("min_read_length", 50)
+MIN_BASE_QUALITY = QC_PARAMS.get("min_base_quality", 20)
+MIN_MAPPING_QUALITY = QC_PARAMS.get("min_mapping_quality", 30)
+
+# Fragment analysis parameters
+FRAGMENT_PARAMS = config.get("fragment_params", {})
+MIN_FRAGMENT_LENGTH = FRAGMENT_PARAMS.get("min_fragment_length", 100)
+MAX_FRAGMENT_LENGTH = FRAGMENT_PARAMS.get("max_fragment_length", 1000)
+MOTIF_LENGTH = FRAGMENT_PARAMS.get("motif_length", 4)
+
+# Methylation parameters
+METHYLATION_PARAMS = config.get("methylation_params", {})
+CPG_WINDOW_SIZE = METHYLATION_PARAMS.get("cpg_window_size", 100)
+MIN_CPG_COVERAGE = METHYLATION_PARAMS.get("min_cpg_coverage", 10)
+
+# Rule: Quality Control
+rule quality_control:
+    input:
+        fastq = f"{DATA_DIR}/raw/{{sample}}.fastq.gz",
+        bam = f"{DATA_DIR}/aligned/{{sample}}.bam"
+    output:
+        qc_report = f"{PROCESSED_DIR}/qc_reports/{{sample}}_qc_report.html",
+        qc_stats = f"{PROCESSED_DIR}/qc_stats/{{sample}}_qc_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_qc.log"
+    message: "Running quality control for {wildcards.sample}"
+    shell:
+        """
+        # Run FastQC
+        fastqc {input.fastq} -o {PROCESSED_DIR}/qc_reports/ --quiet
+        
+        # Run samtools flagstat
+        samtools flagstat {input.bam} > {PROCESSED_DIR}/qc_stats/{wildcards.sample}_flagstat.txt
+        
+        # Generate custom QC report
+        python scripts/qc_report.py \
+            --fastq {input.fastq} \
+            --bam {input.bam} \
+            --output {output.qc_report} \
+            --stats {output.qc_stats} \
+            --min-read-length {MIN_READ_LENGTH} \
+            --min-base-quality {MIN_BASE_QUALITY} \
+            --min-mapping-quality {MIN_MAPPING_QUALITY} \
+            --log {log}
+        """
+
+# Rule: Extract End-Motifs
+rule extract_end_motifs:
+    input:
+        bam = f"{DATA_DIR}/aligned/{{sample}}.bam",
+        ref = f"{DATA_DIR}/reference.fasta"
+    output:
+        motifs_5p = f"{PROCESSED_DIR}/end_motifs/{{sample}}_5p_motifs.txt",
+        motifs_3p = f"{PROCESSED_DIR}/end_motifs/{{sample}}_3p_motifs.txt",
+        motif_stats = f"{PROCESSED_DIR}/end_motifs/{{sample}}_motif_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_motifs.log"
+    message: "Extracting end-motifs for {wildcards.sample}"
+    shell:
+        """
+        python scripts/extract_end_motifs.py \
+            --bam {input.bam} \
+            --reference {input.ref} \
+            --motif-length {MOTIF_LENGTH} \
+            --min-fragment-length {MIN_FRAGMENT_LENGTH} \
+            --max-fragment-length {MAX_FRAGMENT_LENGTH} \
+            --output-5p {output.motifs_5p} \
+            --output-3p {output.motifs_3p} \
+            --stats {output.motif_stats} \
+            --log {log}
+        """
+
+# Rule: Analyze Fragment Sizes
+rule analyze_fragment_sizes:
+    input:
+        bam = f"{DATA_DIR}/aligned/{{sample}}.bam"
+    output:
+        size_dist = f"{PROCESSED_DIR}/fragment_sizes/{{sample}}_size_distribution.txt",
+        size_stats = f"{PROCESSED_DIR}/fragment_sizes/{{sample}}_size_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_fragment_sizes.log"
+    message: "Analyzing fragment sizes for {wildcards.sample}"
+    shell:
+        """
+        python scripts/analyze_fragment_sizes.py \
+            --bam {input.bam} \
+            --min-length {MIN_FRAGMENT_LENGTH} \
+            --max-length {MAX_FRAGMENT_LENGTH} \
+            --output-dist {output.size_dist} \
+            --output-stats {output.size_stats} \
+            --log {log}
+        """
+
+# Rule: Call Methylation
+rule call_methylation:
+    input:
+        bam = f"{DATA_DIR}/aligned/{{sample}}.bam",
+        ref = f"{DATA_DIR}/reference.fasta",
+        fast5 = f"{DATA_DIR}/fast5/{{sample}}_fast5/"
+    output:
+        methylation_calls = f"{PROCESSED_DIR}/methylation/{{sample}}_methylation_calls.txt",
+        methylation_stats = f"{PROCESSED_DIR}/methylation/{{sample}}_methylation_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_methylation.log"
+    message: "Calling methylation for {wildcards.sample}"
+    shell:
+        """
+        # Call methylation using nanopolish
+        nanopolish call-methylation \
+            -r {input.bam} \
+            -g {input.ref} \
+            -b {input.fast5} \
+            -t 8 \
+            --min-coverage {MIN_CPG_COVERAGE} \
+            > {output.methylation_calls} 2> {log}
+        
+        # Process methylation calls
+        python scripts/process_methylation.py \
+            --methylation-calls {output.methylation_calls} \
+            --output-stats {output.methylation_stats} \
+            --window-size {CPG_WINDOW_SIZE} \
+            --log {log}
+        """
+
+# Rule: Call Base Modifications
+rule call_base_modifications:
+    input:
+        bam = f"{DATA_DIR}/aligned/{{sample}}.bam",
+        ref = f"{DATA_DIR}/reference.fasta"
+    output:
+        n6ma_calls = f"{PROCESSED_DIR}/base_modifications/{{sample}}_6ma_calls.txt",
+        hmc_calls = f"{PROCESSED_DIR}/base_modifications/{{sample}}_5hmc_calls.txt",
+        mod_stats = f"{PROCESSED_DIR}/base_modifications/{{sample}}_modification_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_base_modifications.log"
+    message: "Calling base modifications for {wildcards.sample}"
+    shell:
+        """
+        # Call 6mA modifications
+        python scripts/call_6ma.py \
+            --bam {input.bam} \
+            --reference {input.ref} \
+            --output {output.n6ma_calls} \
+            --log {log}
+        
+        # Call 5hmC modifications
+        python scripts/call_5hmc.py \
+            --bam {input.bam} \
+            --reference {input.ref} \
+            --output {output.hmc_calls} \
+            --log {log}
+        
+        # Generate modification statistics
+        python scripts/modification_stats.py \
+            --6ma-calls {output.n6ma_calls} \
+            --5hmc-calls {output.hmc_calls} \
+            --output {output.mod_stats} \
+            --log {log}
+        """
+
+# Rule: Integrate Features
+rule integrate_features:
+    input:
+        motifs_5p = f"{PROCESSED_DIR}/end_motifs/{{sample}}_5p_motifs.txt",
+        motifs_3p = f"{PROCESSED_DIR}/end_motifs/{{sample}}_3p_motifs.txt",
+        size_dist = f"{PROCESSED_DIR}/fragment_sizes/{{sample}}_size_distribution.txt",
+        methylation_calls = f"{PROCESSED_DIR}/methylation/{{sample}}_methylation_calls.txt",
+        n6ma_calls = f"{PROCESSED_DIR}/base_modifications/{{sample}}_6ma_calls.txt",
+        hmc_calls = f"{PROCESSED_DIR}/base_modifications/{{sample}}_5hmc_calls.txt"
+    output:
+        features = f"{PROCESSED_DIR}/{{sample}}_features.h5",
+        feature_stats = f"{PROCESSED_DIR}/{{sample}}_feature_stats.json"
+    log:
+        f"{PROCESSED_DIR}/logs/{{sample}}_feature_integration.log"
+    message: "Integrating features for {wildcards.sample}"
+    shell:
+        """
+        python scripts/integrate_features.py \
+            --motifs-5p {input.motifs_5p} \
+            --motifs-3p {input.motifs_3p} \
+            --size-dist {input.size_dist} \
+            --methylation {input.methylation_calls} \
+            --6ma {input.n6ma_calls} \
+            --5hmc {input.hmc_calls} \
+            --output {output.features} \
+            --stats {output.feature_stats} \
+            --log {log}
+        """ 

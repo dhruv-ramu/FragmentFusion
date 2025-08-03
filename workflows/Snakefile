@@ -1,0 +1,74 @@
+# FragmentFusion Main Snakefile
+# Orchestrates modular workflows for cfDNA processing and transformer training
+
+import os
+import yaml
+from pathlib import Path
+
+# Load configuration
+configfile: "config.yaml"
+
+# Include subworkflows
+include: "cfdna_processing/Snakefile"
+include: "transformer_training/Snakefile"
+
+# Define global parameters
+SAMPLES = config.get("samples", [])
+DATA_DIR = config.get("data_dir", "data")
+RESULTS_DIR = config.get("results_dir", "results")
+
+# Main workflow rule
+rule all:
+    input:
+        # cfDNA processing outputs
+        expand(f"{RESULTS_DIR}/cfdna_processed/{{sample}}_features.h5", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/cfdna_processed/{{sample}}_qc_report.html", sample=SAMPLES),
+        # Transformer training outputs
+        f"{RESULTS_DIR}/models/fragment_fusion_final.pt",
+        f"{RESULTS_DIR}/training/training_summary.json",
+        # Final evaluation
+        f"{RESULTS_DIR}/evaluation/evaluation_results.json"
+    message: "FragmentFusion workflow completed successfully"
+
+# Quality control summary
+rule qc_summary:
+    input:
+        qc_reports = expand(f"{RESULTS_DIR}/cfdna_processed/{{sample}}_qc_report.html", sample=SAMPLES)
+    output:
+        summary = f"{RESULTS_DIR}/qc_summary.html"
+    message: "Generating QC summary report"
+    shell:
+        """
+        python scripts/generate_qc_summary.py \
+            --reports {input.qc_reports} \
+            --output {output.summary}
+        """
+
+# Workflow validation
+rule validate_workflow:
+    input:
+        config = "config.yaml",
+        samples = f"{DATA_DIR}/samples.txt"
+    output:
+        touch(f"{RESULTS_DIR}/workflow_validated.txt")
+    message: "Validating workflow configuration"
+    shell:
+        """
+        python scripts/validate_workflow.py \
+            --config {input.config} \
+            --samples {input.samples}
+        """
+
+# Cleanup temporary files
+rule cleanup:
+    input:
+        all_outputs = rules.all.input
+    output:
+        touch(f"{RESULTS_DIR}/workflow_complete.txt")
+    message: "Cleaning up temporary files"
+    shell:
+        """
+        find {RESULTS_DIR} -name "*.tmp" -delete
+        find {RESULTS_DIR} -name "*.temp" -delete
+        echo "Workflow completed at $(date)" > {output}
+        """ 

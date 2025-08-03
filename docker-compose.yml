@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  fragment-fusion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fragment-fusion:latest
+    container_name: fragment-fusion
+    runtime: nvidia  # Enable GPU support
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      # Mount data directories
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./logs:/app/logs
+      # Mount source code for development
+      - ./src:/app/src
+      - ./workflows:/app/workflows
+      - ./scripts:/app/scripts
+      # Mount configuration files
+      - ./configs:/app/configs
+    ports:
+      - "8000:8000"  # API port
+      - "8888:8888"  # Jupyter notebook port
+    working_dir: /app
+    command: conda run -n fragment-fusion bash
+    stdin_open: true
+    tty: true
+
+  # Development service with hot reloading
+  fragment-fusion-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fragment-fusion:dev
+    container_name: fragment-fusion-dev
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONPATH=/app/src
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./logs:/app/logs
+      - ./src:/app/src
+      - ./workflows:/app/workflows
+      - ./scripts:/app/scripts
+      - ./configs:/app/configs
+      - ./tests:/app/tests
+    ports:
+      - "8000:8000"
+      - "8888:8888"
+    working_dir: /app
+    command: conda run -n fragment-fusion jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+    stdin_open: true
+    tty: true
+
+  # GPU monitoring service
+  gpu-monitor:
+    image: nvidia/cuda:12.1-base-ubuntu22.04
+    container_name: gpu-monitor
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: nvidia-smi -l 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
